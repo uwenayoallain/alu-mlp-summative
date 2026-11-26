@@ -143,6 +143,8 @@ def run_retraining(trigger: str = "manual", predictor=None) -> int:
             meta = save_model(new_model, after, extra={"trained_on": "retrain", "run_id": run_id,
                                                        "n_new_images": int(len(y_new))}, h5=False)
             version = meta["version"]
+            from src.model_store import record_version
+            record_version(head, meta, "retrain")
             save_embeddings(REPLAY_EMB_PATH, x_all, y_all)
             if predictor is not None:
                 predictor.swap(new_model)

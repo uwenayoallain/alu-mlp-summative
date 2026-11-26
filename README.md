@@ -69,6 +69,9 @@ Files: `models/coffee_leaf_model.keras` (served), `models/coffee_leaf_model.h5`.
    the original training data.
 4. The new version replaces the served model only if test accuracy drops by no more than one point.
 
+Uploads, retraining runs, predictions and every model version (its classifier weights) are stored in
+PostgreSQL on Render, so the latest retrained model is restored after a restart or redeploy.
+
 Triggers: the Retrain button, or automatically once 50 unused images are uploaded (`RETRAIN_THRESHOLD`).
 
 ## API

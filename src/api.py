@@ -39,6 +39,9 @@ from src.preprocessing import IMAGE_EXTS, is_valid_image, list_images, load_imag
 STARTED_AT = time.time()
 init_db()
 predictor = Predictor()
+from src.model_store import restore_latest  # noqa: E402
+
+restore_latest(predictor)
 app = FastAPI(title="Coffee Leaf Disease API",
               description="Predict coffee leaf diseases from photos, upload new labelled data and retrain the model.",
               version="1.0")

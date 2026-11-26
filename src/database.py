@@ -7,6 +7,7 @@ Uses SQLite by default; set DATABASE_URL to a PostgreSQL URL to use Postgres.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import (Boolean, DateTime, Float, Integer, LargeBinary, String, Text, create_engine, func,
@@ -61,9 +62,20 @@ class PredictionLog(Base):
     model_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class ModelVersion(Base):
+    """Every served model version. The classifier head weights (about 25 KB) are stored here so the
+    latest retrained model survives restarts on hosts with an ephemeral disk; the backbone never changes."""
+    __tablename__ = "model_versions"
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    source: Mapped[str] = mapped_column(String(16))  # "notebook" or "retrain"
+    metadata_json: Mapped[str] = mapped_column(Text)  # the model_metadata.json written for this version
+    head_weights: Mapped[bytes] = mapped_column(LargeBinary)
+
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-_url = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1) if DATABASE_URL.startswith("postgres://") \
-    else DATABASE_URL
+# Render and Heroku give postgres:// or postgresql:// URLs; point both at the installed psycopg 3 driver.
+_url = re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", DATABASE_URL)
 engine = create_engine(_url, connect_args={"check_same_thread": False} if _url.startswith("sqlite") else {},
                        pool_pre_ping=True)
 
