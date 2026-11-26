@@ -181,9 +181,14 @@ def trigger_retrain():
 
 
 @app.get("/retrain/status", tags=["retraining"])
-def retrain_status(limit: int = 10):
+def retrain_status(limit: int = 10, include_interrupted: bool = False):
+    """Recent runs. Runs cut off by a server restart are hidden unless include_interrupted is set;
+    their uploads were picked up by a later run."""
+    query = select(TrainingRun).order_by(desc(TrainingRun.id)).limit(limit)
+    if not include_interrupted:
+        query = query.where(~((TrainingRun.status == "failed") & TrainingRun.log.contains("interrupted:")))
     with session() as s:
-        runs = s.scalars(select(TrainingRun).order_by(desc(TrainingRun.id)).limit(limit)).all()
+        runs = s.scalars(query).all()
     return {"running": retrain.is_running(),
             "runs": [{c.name: getattr(r, c.name) for c in TrainingRun.__table__.columns} for r in runs]}
 
