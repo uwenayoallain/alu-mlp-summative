@@ -3,10 +3,12 @@ const SHORT = { cercospora: "Cercospora", healthy: "Healthy", miner: "Leaf miner
 const INK = "#222", GREY = "#c8c8c8";
 const $ = (id) => document.getElementById(id);
 
-Chart.defaults.font.family = "system-ui, sans-serif";
-Chart.defaults.color = "#777";
-Chart.defaults.plugins.legend.display = false;
-Chart.defaults.animation = false;
+if (window.Chart) {
+  Chart.defaults.font.family = "system-ui, sans-serif";
+  Chart.defaults.color = "#777";
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.animation = false;
+}
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -21,6 +23,7 @@ function fmtUptime(s) {
   return (d ? d + "d " : "") + h + "h " + m + "m " + Math.floor(s % 60) + "s";
 }
 function bar(id, datasets, opts = {}) {
+  if (!window.Chart) return;
   new Chart($(id), {
     type: "bar",
     data: { labels: CLASSES.map((c) => SHORT[c]), datasets },
@@ -36,20 +39,28 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   if (b.dataset.tab === "retrain") loadRetrain();
 }));
 
-// overview
+// overview: each part loads on its own and retries, so one slow or failed request never blanks the page
 let uptime = null;
-async function loadOverview() {
-  try {
-    const [h, m, p] = await Promise.all([api("/health"), api("/model"), api("/stats/predictions")]);
-    uptime = { s: h.uptime_seconds, at: Date.now() };
-    $("version").textContent = "v" + h.model_version;
-    $("pred-total").textContent = p.total;
-    const x = m.metrics || {};
-    $("metrics").innerHTML = tiles([["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
-      ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]]);
-    $("versions").querySelector("tbody").innerHTML = (m.history || []).slice().reverse().map((v) =>
-      `<tr><td>v${v.version}</td><td>${v.trained_on || "-"}</td><td>${pct(v.metrics.accuracy)}</td><td>${pct(v.metrics.f1)}</td></tr>`).join("");
-  } catch { /* retried on the next tick */ }
+async function loadHealth() {
+  const h = await api("/health");
+  uptime = { s: h.uptime_seconds, at: Date.now() };
+  $("version").textContent = "v" + h.model_version;
+}
+async function loadModel() {
+  const m = await api("/model"), x = m.metrics || {};
+  $("metrics").innerHTML = tiles([["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
+    ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]]);
+  $("versions").querySelector("tbody").innerHTML = (m.history || []).slice().reverse().map((v) =>
+    `<tr><td>v${v.version}</td><td>${v.trained_on || "-"}</td><td>${pct(v.metrics.accuracy)}</td><td>${pct(v.metrics.f1)}</td></tr>`).join("");
+}
+async function loadCount() {
+  $("pred-total").textContent = (await api("/stats/predictions")).total;
+}
+const loaded = {};
+function loadOverview() {
+  for (const [name, fn] of [["health", loadHealth], ["model", loadModel], ["count", loadCount]]) {
+    fn().then(() => { loaded[name] = true; }).catch(() => { if (!loaded[name]) setTimeout(() => fn().then(() => { loaded[name] = true; }).catch(() => {}), 3000); });
+  }
 }
 setInterval(() => { if (uptime) $("uptime").textContent = fmtUptime(uptime.s + (Date.now() - uptime.at) / 1000); }, 1000);
 
@@ -59,6 +70,7 @@ $("eval-btn").addEventListener("click", async () => {
     const r = await api("/evaluate?n_images=10"), t = r.test_set;
     const cm = `<table class="cm"><tr><th></th>${CLASSES.map((c) => `<th>${SHORT[c]}</th>`).join("")}</tr>` +
       t.confusion_matrix.map((row, i) => `<tr><th>${SHORT[CLASSES[i]]}</th>${row.map((v, j) => `<td class="${i === j ? "diag" : ""}">${v}</td>`).join("")}</tr>`).join("") + "</table>";
+    loadOverview();
     $("eval-result").innerHTML = `<p class="muted">Model v${r.model_version}, ${t.n_samples} test images</p>
       <div class="stats">${tiles([["Accuracy", pct(t.accuracy)], ["Precision", pct(t.precision)], ["Recall", pct(t.recall)], ["F1", pct(t.f1)], ["Loss", t.loss.toFixed(3)]])}</div>
       <h2>Confusion matrix (rows: true class)</h2>${cm}`;
@@ -78,8 +90,18 @@ function pick(f) {
   $("preview").style.display = "block";
   $("drop-text").style.display = "none";
   $("predict-btn").disabled = false;
+  $("reset-btn").hidden = false;
 }
 $("predict-file").addEventListener("change", (e) => pick(e.target.files[0]));
+$("reset-btn").addEventListener("click", () => {
+  file = null;
+  $("predict-file").value = "";
+  $("preview").style.display = "none";
+  $("drop-text").style.display = "";
+  $("predict-result").innerHTML = "";
+  $("predict-btn").disabled = true;
+  $("reset-btn").hidden = true;
+});
 const drop = $("drop");
 drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
@@ -93,6 +115,7 @@ $("predict-btn").addEventListener("click", async () => {
     const rows = Object.entries(r.probabilities).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
       `<div class="bar-row ${i === 0 ? "top" : ""}"><span>${SHORT[c]}</span><div class="bar"><div style="width:${p * 100}%"></div></div><span>${(p * 100).toFixed(1)}%</span></div>`).join("");
     $("predict-result").innerHTML = `<div class="verdict">${r.label}</div><p class="muted">${(r.confidence * 100).toFixed(1)}% confidence</p>${rows}`;
+    loadCount().catch(() => {});
   } catch (e) {
     $("predict-result").innerHTML = `<p class="bad">${e.message}</p>`;
   } finally {

@@ -19,9 +19,9 @@
 
 <section id="overview" class="panel active">
   <div class="stats">
-    <div><span>Uptime</span><b id="uptime">-</b></div>
-    <div><span>Model</span><b id="version">-</b></div>
-    <div><span>Predictions</span><b id="pred-total">-</b></div>
+    <div><span>Uptime</span><b id="uptime">loading</b></div>
+    <div><span>Model</span><b id="version">loading</b></div>
+    <div><span>Predictions</span><b id="pred-total">loading</b></div>
   </div>
   <h2>Test metrics</h2>
   <div class="stats" id="metrics"></div>
@@ -41,6 +41,7 @@
         <span id="drop-text">Choose or drop a leaf photo</span>
       </label>
       <button id="predict-btn" disabled>Predict</button>
+      <button id="reset-btn" class="secondary" hidden>New prediction</button>
     </div>
     <div id="predict-result"></div>
   </div>

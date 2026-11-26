@@ -31,6 +31,7 @@ th { font-weight: 500; color: var(--muted); font-size: 12px; }
 .drop input { display: none; }
 .drop img { max-width: 100%; max-height: 240px; display: none; }
 button:not(.tab) { background: var(--ink); color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font: inherit; cursor: pointer; }
+button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); margin-left: 8px; }
 button:not(.tab):disabled { opacity: .35; cursor: default; }
 .row { display: grid; grid-template-columns: 240px 1fr auto; gap: 12px; align-items: center; }
 .row select, .row .drop { margin: 0; }
