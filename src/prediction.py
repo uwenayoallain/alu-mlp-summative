@@ -14,6 +14,9 @@ from src.preprocessing import load_image
 class Predictor:
     def __init__(self, path=MODEL_PATH):
         self._lock = threading.Lock()
+        # One inference at a time per process: concurrent requests queue instead of each
+        # allocating TensorFlow buffers (which exhausts memory under load). Scale out with containers.
+        self._infer = threading.Lock()
         self.path = path
         self.model = None
         self.loaded_at: float | None = None
@@ -38,7 +41,8 @@ class Predictor:
         """Predict one image at a time: same input shape as warm-up, so memory stays flat."""
         with self._lock:
             model = self.model
-        return np.concatenate([model(x[i:i + 1].astype(np.float32), training=False).numpy() for i in range(len(x))])
+        with self._infer:
+            return np.concatenate([model(x[i:i + 1].astype(np.float32), training=False).numpy() for i in range(len(x))])
 
     def predict_bytes(self, data: bytes) -> dict:
         probs = self.predict_array(load_image(data)[None])[0]
