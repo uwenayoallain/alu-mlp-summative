@@ -11,7 +11,7 @@ if (window.Chart) {
 }
 
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  const r = await fetch(path, { cache: "no-store", ...opts });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.detail || r.statusText);
   return body;
@@ -39,27 +39,20 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   if (b.dataset.tab === "retrain") loadRetrain();
 }));
 
-// overview: each part loads on its own and retries, so one slow or failed request never blanks the page
+// overview: one request; retried every 3 seconds until it succeeds, then refreshed every 10 seconds
 let uptime = null;
-async function loadHealth() {
-  const h = await api("/health");
-  uptime = { s: h.uptime_seconds, at: Date.now() };
-  $("version").textContent = "v" + h.model_version;
-}
-async function loadModel() {
-  const m = await api("/model"), x = m.metrics || {};
-  $("metrics").innerHTML = tiles([["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
-    ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]]);
-  $("versions").querySelector("tbody").innerHTML = (m.history || []).slice().reverse().map((v) =>
-    `<tr><td>v${v.version}</td><td>${v.trained_on || "-"}</td><td>${pct(v.metrics.accuracy)}</td><td>${pct(v.metrics.f1)}</td></tr>`).join("");
-}
-async function loadCount() {
-  $("pred-total").textContent = (await api("/stats/predictions")).total;
-}
-const loaded = {};
-function loadOverview() {
-  for (const [name, fn] of [["health", loadHealth], ["model", loadModel], ["count", loadCount]]) {
-    fn().then(() => { loaded[name] = true; }).catch(() => { if (!loaded[name]) setTimeout(() => fn().then(() => { loaded[name] = true; }).catch(() => {}), 3000); });
+async function loadOverview() {
+  try {
+    const o = await api("/summary"), x = o.metrics || {};
+    uptime = { s: o.uptime_seconds, at: Date.now() };
+    $("version").textContent = "v" + o.model_version;
+    $("pred-total").textContent = o.predictions;
+    $("metrics").innerHTML = tiles([["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
+      ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]]);
+    $("versions").querySelector("tbody").innerHTML = o.history.slice().reverse().map((v) =>
+      `<tr><td>v${v.version}</td><td>${v.trained_on || "-"}</td><td>${pct(v.metrics.accuracy)}</td><td>${pct(v.metrics.f1)}</td></tr>`).join("");
+  } catch {
+    if (!uptime) setTimeout(loadOverview, 3000);
   }
 }
 setInterval(() => { if (uptime) $("uptime").textContent = fmtUptime(uptime.s + (Date.now() - uptime.at) / 1000); }, 1000);
@@ -115,7 +108,7 @@ $("predict-btn").addEventListener("click", async () => {
     const rows = Object.entries(r.probabilities).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
       `<div class="bar-row ${i === 0 ? "top" : ""}"><span>${SHORT[c]}</span><div class="bar"><div style="width:${p * 100}%"></div></div><span>${(p * 100).toFixed(1)}%</span></div>`).join("");
     $("predict-result").innerHTML = `<div class="verdict">${r.label}</div><p class="muted">${(r.confidence * 100).toFixed(1)}% confidence</p>${rows}`;
-    loadCount().catch(() => {});
+    loadOverview();
   } catch (e) {
     $("predict-result").innerHTML = `<p class="bad">${e.message}</p>`;
   } finally {

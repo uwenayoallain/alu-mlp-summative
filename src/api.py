@@ -92,6 +92,16 @@ def model_info():
     return meta
 
 
+@app.get("/summary", tags=["monitoring"])
+def summary():
+    """Everything the dashboard Overview shows, in one request."""
+    meta = read_metadata()
+    with session() as s:
+        total = s.scalar(select(func.count(PredictionLog.id))) or 0
+    return {"uptime_seconds": round(time.time() - STARTED_AT, 1), "model_version": meta.get("version"),
+            "metrics": meta.get("metrics", {}), "history": meta.get("history", []), "predictions": total}
+
+
 @app.post("/predict", tags=["prediction"])
 def predict(file: UploadFile = File(..., description="Photo of one coffee leaf")):
     data = file.file.read()
