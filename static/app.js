@@ -1,7 +1,6 @@
 const CLASSES = ["cercospora", "healthy", "miner", "phoma", "rust"];
 const SHORT = { cercospora: "Cercospora", healthy: "Healthy", miner: "Leaf miner", phoma: "Brown leaf spot", rust: "Leaf rust" };
-const INK = "#222", GREY = "#c8c8c8", ACCENT = "#1f5130";
-const charts = {};
+const INK = "#222", GREY = "#c8c8c8";
 const $ = (id) => document.getElementById(id);
 
 Chart.defaults.font.family = "system-ui, sans-serif";
@@ -16,16 +15,16 @@ async function api(path, opts) {
   return body;
 }
 const pct = (v) => (v == null ? "-" : (v * 100).toFixed(1) + "%");
+const tiles = (pairs) => pairs.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("");
 function fmtUptime(s) {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   return (d ? d + "d " : "") + h + "h " + m + "m " + Math.floor(s % 60) + "s";
 }
-function bar(id, values, opts = {}) {
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart($(id), {
+function bar(id, datasets, opts = {}) {
+  new Chart($(id), {
     type: "bar",
-    data: { labels: CLASSES.map((c) => SHORT[c]), datasets: values },
-    options: { scales: { x: { stacked: opts.stacked, grid: { display: false } }, y: { stacked: opts.stacked, beginAtZero: true, ticks: { precision: 0 }, title: { display: !!opts.y, text: opts.y } } },
+    data: { labels: CLASSES.map((c) => SHORT[c]), datasets },
+    options: { scales: { x: { stacked: opts.stacked, grid: { display: false } }, y: { stacked: opts.stacked, beginAtZero: true, title: { display: !!opts.y, text: opts.y } } },
       plugins: { legend: { display: !!opts.legend } } },
   });
 }
@@ -39,36 +38,36 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
 
 // overview
 let uptime = null;
-async function loadHealth() {
+async function loadOverview() {
   try {
-    const h = await api("/health");
-    $("status").className = "status up";
-    $("status").textContent = h.retraining ? "retraining" : "online";
+    const [h, m, p] = await Promise.all([api("/health"), api("/model"), api("/stats/predictions")]);
     uptime = { s: h.uptime_seconds, at: Date.now() };
-    $("version").textContent = "v" + (h.model_version ?? "-");
-    $("instance").textContent = `Instance ${h.instance}, up since ${new Date(h.started_at).toLocaleString()}`;
-  } catch {
-    $("status").className = "status down";
-    $("status").textContent = "offline";
-    uptime = null;
-  }
+    $("version").textContent = "v" + h.model_version;
+    $("pred-total").textContent = p.total;
+    const x = m.metrics || {};
+    $("metrics").innerHTML = tiles([["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
+      ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]]);
+    $("versions").querySelector("tbody").innerHTML = (m.history || []).slice().reverse().map((v) =>
+      `<tr><td>v${v.version}</td><td>${v.trained_on || "-"}</td><td>${pct(v.metrics.accuracy)}</td><td>${pct(v.metrics.f1)}</td></tr>`).join("");
+  } catch { /* retried on the next tick */ }
 }
 setInterval(() => { if (uptime) $("uptime").textContent = fmtUptime(uptime.s + (Date.now() - uptime.at) / 1000); }, 1000);
 
-async function loadModel() {
-  const m = await api("/model"), x = m.metrics || {};
-  $("metrics").innerHTML = [["Accuracy", pct(x.accuracy)], ["Precision", pct(x.precision)], ["Recall", pct(x.recall)],
-    ["F1", pct(x.f1)], ["Loss", x.loss?.toFixed(3) ?? "-"]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("");
-  $("versions").querySelector("tbody").innerHTML = (m.history || []).slice().reverse().map((h) =>
-    `<tr><td>v${h.version}</td><td>${h.trained_on || "-"}</td><td>${pct(h.metrics.accuracy)}</td><td>${pct(h.metrics.f1)}</td></tr>`).join("");
-}
-
-async function loadPredStats() {
-  const s = await api("/stats/predictions");
-  $("pred-total").textContent = s.total;
-  $("pred-latency").textContent = s.avg_latency_ms ? s.avg_latency_ms + " ms" : "-";
-  bar("chart-preds", [{ data: CLASSES.map((c) => s.by_class[c]), backgroundColor: INK }]);
-}
+$("eval-btn").addEventListener("click", async () => {
+  const btn = $("eval-btn"); btn.disabled = true; btn.textContent = "Evaluating...";
+  try {
+    const r = await api("/evaluate?n_images=10"), t = r.test_set;
+    const cm = `<table class="cm"><tr><th></th>${CLASSES.map((c) => `<th>${SHORT[c]}</th>`).join("")}</tr>` +
+      t.confusion_matrix.map((row, i) => `<tr><th>${SHORT[CLASSES[i]]}</th>${row.map((v, j) => `<td class="${i === j ? "diag" : ""}">${v}</td>`).join("")}</tr>`).join("") + "</table>";
+    $("eval-result").innerHTML = `<p class="muted">Model v${r.model_version}, ${t.n_samples} test images</p>
+      <div class="stats">${tiles([["Accuracy", pct(t.accuracy)], ["Precision", pct(t.precision)], ["Recall", pct(t.recall)], ["F1", pct(t.f1)], ["Loss", t.loss.toFixed(3)]])}</div>
+      <h2>Confusion matrix (rows: true class)</h2>${cm}`;
+  } catch (e) {
+    $("eval-result").innerHTML = `<p class="bad">${e.message}</p>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Evaluate current model";
+  }
+});
 
 // predict
 let file = null;
@@ -87,24 +86,21 @@ drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); pick(e.dataTransfer.files[0]); });
 
 $("predict-btn").addEventListener("click", async () => {
-  const btn = $("predict-btn");
-  btn.disabled = true;
+  const btn = $("predict-btn"); btn.disabled = true; btn.textContent = "Predicting...";
   const fd = new FormData(); fd.append("file", file);
   try {
     const r = await api("/predict", { method: "POST", body: fd });
     const rows = Object.entries(r.probabilities).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
       `<div class="bar-row ${i === 0 ? "top" : ""}"><span>${SHORT[c]}</span><div class="bar"><div style="width:${p * 100}%"></div></div><span>${(p * 100).toFixed(1)}%</span></div>`).join("");
-    $("predict-result").innerHTML = `<div class="verdict">${r.label}</div>
-      <p class="muted">${(r.confidence * 100).toFixed(1)}% confidence, ${r.latency_ms} ms, model v${r.model_version}</p>${rows}`;
-    loadPredStats();
+    $("predict-result").innerHTML = `<div class="verdict">${r.label}</div><p class="muted">${(r.confidence * 100).toFixed(1)}% confidence</p>${rows}`;
   } catch (e) {
     $("predict-result").innerHTML = `<p class="bad">${e.message}</p>`;
   } finally {
-    btn.disabled = false;
+    btn.disabled = false; btn.textContent = "Predict";
   }
 });
 
-// data insights
+// data
 let dataLoaded = false;
 async function loadData() {
   if (dataLoaded) return;
@@ -114,7 +110,6 @@ async function loadData() {
     { label: "train", data: CLASSES.map((c) => s.counts.train[c]), backgroundColor: INK },
     { label: "test", data: CLASSES.map((c) => s.counts.test[c]), backgroundColor: GREY }], { stacked: true, legend: true, y: "images" });
   bar("chart-lesion", [{ data: CLASSES.map((c) => +(f.lesion_ratio[c].mean * 100).toFixed(2)), backgroundColor: INK }], { y: "% of leaf" });
-  bar("chart-green", [{ data: CLASSES.map((c) => +(f.green_ratio[c].median * 100).toFixed(1)), backgroundColor: INK }], { y: "% of leaf" });
   bar("chart-texture", [{ data: CLASSES.map((c) => +f.texture[c].mean.toFixed(2)), backgroundColor: INK }], { y: "mean gradient" });
 }
 
@@ -131,68 +126,38 @@ $("upload-btn").addEventListener("click", async () => {
   const fd = new FormData();
   [...files].forEach((f) => fd.append("files", f));
   if (sel.value) fd.append("label", sel.value);
-  const btn = $("upload-btn"); btn.disabled = true;
+  const btn = $("upload-btn"); btn.disabled = true; btn.textContent = "Uploading...";
   try {
     const r = await api("/upload", { method: "POST", body: fd });
-    $("upload-result").innerHTML = `<p>Saved ${r.saved_total}.` +
-      (r.rejected.length ? ` <span class="bad">Rejected ${r.rejected.length}: ${r.rejected.slice(0, 3).map((x) => x.file + " (" + x.reason + ")").join(", ")}</span>` : "") +
-      (r.auto_retrain_started ? " Retraining started automatically." : "") + "</p>";
+    $("upload-result").textContent = `Saved ${r.saved_total} images to the database.` +
+      (r.rejected.length ? ` Rejected ${r.rejected.length}.` : "") + (r.auto_retrain_started ? " Retraining started automatically." : "");
     $("upload-files").value = ""; $("upload-text").textContent = "Choose files";
     loadRetrain();
   } catch (e) {
-    $("upload-result").innerHTML = `<p class="bad">${e.message}</p>`;
+    $("upload-result").textContent = e.message;
   } finally {
-    btn.disabled = false;
+    btn.disabled = false; btn.textContent = "Upload";
   }
 });
 
 let poll = null;
 async function loadRetrain() {
   const [u, st] = await Promise.all([api("/uploads"), api("/retrain/status")]);
-  bar("chart-pending", [
-    { label: "waiting", data: CLASSES.map((c) => u.pending[c]), backgroundColor: INK },
-    { label: "used", data: CLASSES.map((c) => u.used[c]), backgroundColor: GREY }], { stacked: true, legend: true });
-  $("threshold-text").textContent = `${u.pending_total} waiting. Auto-retrain at ${u.retrain_threshold}.`;
+  $("pending-text").textContent = `${u.pending_total} new images waiting. Retraining also starts automatically at ${u.retrain_threshold}.`;
   $("retrain-btn").disabled = st.running || u.pending_total === 0;
   $("retrain-btn").textContent = st.running ? "Retraining..." : "Retrain";
-  $("runs").querySelector("tbody").innerHTML = st.runs.map((r) => `<tr><td>${r.id}</td><td>${r.trigger}</td><td>${r.status}</td>
-    <td>${r.n_new_images || "-"}</td><td>${pct(r.accuracy_before)}</td><td>${pct(r.accuracy_after)}</td><td>${pct(r.f1_after)}</td>
-    <td>${r.status === "done" ? (r.promoted ? "v" + r.model_version : "no") : "-"}</td></tr>`).join("")
-    || `<tr><td colspan="8" class="muted">None yet</td></tr>`;
+  $("runs").querySelector("tbody").innerHTML = st.runs.map((r) => `<tr><td>${r.id}</td><td>${r.status}</td><td>${r.n_new_images || "-"}</td>
+    <td>${pct(r.accuracy_before)}</td><td>${pct(r.accuracy_after)}</td><td>${r.promoted ? "v" + r.model_version : "-"}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="muted">None yet</td></tr>`;
   $("run-log").textContent = st.runs[0]?.log || "";
   clearTimeout(poll);
-  if (st.running) poll = setTimeout(() => { loadRetrain(); loadHealth(); }, 2000);
-  else if (st.runs[0]?.status === "done") { loadModel(); loadHealth(); }
+  if (st.running) poll = setTimeout(loadRetrain, 3000);
+  else loadOverview();
 }
 $("retrain-btn").addEventListener("click", async () => {
   try { await api("/retrain", { method: "POST" }); } catch (e) { alert(e.message); }
   loadRetrain();
 });
 
-// evaluate
-$("eval-btn").addEventListener("click", async () => {
-  const btn = $("eval-btn"); btn.disabled = true;
-  try {
-    const r = await api("/evaluate?n_images=30"), t = r.test_set, l = r.live_check;
-    const cm = `<table class="cm"><tr><th></th>${CLASSES.map((c) => `<th>${SHORT[c]}</th>`).join("")}</tr>` +
-      t.confusion_matrix.map((row, i) => `<tr><th>${SHORT[CLASSES[i]]}</th>${row.map((v, j) => `<td class="${i === j ? "diag" : ""}">${v}</td>`).join("")}</tr>`).join("") + "</table>";
-    const per = CLASSES.map((c) => { const p = t.per_class[c]; return `<tr><td>${SHORT[c]}</td><td>${pct(p.precision)}</td><td>${pct(p.recall)}</td><td>${pct(p["f1-score"])}</td><td>${p.support}</td></tr>`; }).join("");
-    $("eval-result").innerHTML = `
-      <h2>Model v${r.model_version}, ${t.n_samples} test images</h2>
-      <div class="stats">${[["Accuracy", pct(t.accuracy)], ["Precision", pct(t.precision)], ["Recall", pct(t.recall)], ["F1", pct(t.f1)], ["Loss", t.loss.toFixed(3)]]
-        .map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
-      <div class="cols">
-        <div><h2>Per class</h2><table><tr><th></th><th>Precision</th><th>Recall</th><th>F1</th><th>n</th></tr>${per}</table></div>
-        <div><h2>Confusion matrix (rows: true)</h2>${cm}</div>
-      </div>
-      ${l ? `<p class="muted">Live check, ${l.n_samples} images through the full pipeline: accuracy ${pct(l.accuracy)}, ${r.seconds}s.</p>` : ""}`;
-  } catch (e) {
-    $("eval-result").innerHTML = `<p class="bad">${e.message}</p>`;
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-loadHealth(); loadModel().catch(() => {}); loadPredStats().catch(() => {});
-setInterval(loadHealth, 15000);
-setInterval(() => loadPredStats().catch(() => {}), 20000);
+loadOverview();
+setInterval(loadOverview, 10000);
