@@ -1,0 +1,27 @@
+{
+  "skipped": {
+    "missing from truncated archive": 343,
+    "undocumented label 5": 62
+  },
+  "train": {
+    "cercospora": 98,
+    "healthy": 102,
+    "miner": 182,
+    "phoma": 249,
+    "rust": 334
+  },
+  "test": {
+    "cercospora": 27,
+    "healthy": 29,
+    "miner": 51,
+    "phoma": 69,
+    "rust": 93
+  },
+  "new_data": {
+    "cercospora": 11,
+    "healthy": 11,
+    "miner": 20,
+    "phoma": 28,
+    "rust": 38
+  }
+}

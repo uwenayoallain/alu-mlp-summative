@@ -1,0 +1,34 @@
+[project]
+name = "coffee-leaf-pipeline"
+version = "0.1.0"
+description = "Coffee leaf disease classification pipeline: training, API, retraining and monitoring"
+readme = "README.md"
+authors = [
+    { name = "UWENAYO Alain Pacifique", email = "uwenayoallain@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.165.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.5",
+    "pandas>=3.1.1",
+    "pillow>=13.0.0",
+    "python-multipart>=0.0.34",
+    "scikit-learn>=1.9.1",
+    "seaborn>=0.13.2",
+    "sqlalchemy>=2.1.9",
+    "tensorflow>=2.19,<2.21",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "jupyter>=1.1.1",
+    "locust>=2.47.0",
+    "nbconvert>=7.17.2",
+    "tabulate>=0.10.0",
+]
