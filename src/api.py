@@ -31,7 +31,8 @@ from sqlalchemy import desc, func, select  # noqa: E402
 from src import retrain  # noqa: E402
 from src.config import (CLASS_LABELS, CLASS_NAMES, DATASET_STATS_PATH, IMAGE_LIMIT_MB, RETRAIN_THRESHOLD,  # noqa: E402
                         STATIC_DIR, TEST_DIR, TEST_EMB_PATH)
-from src.database import PredictionLog, TrainingRun, Upload, init_db, pending_upload_count, session  # noqa: E402
+from src.database import (PredictionLog, TrainingRun, Upload, engine, init_db, pending_upload_count,  # noqa: E402
+                          session)
 from src.model import evaluate_predictions, read_metadata, split_model  # noqa: E402
 from src.prediction import Predictor  # noqa: E402
 from src.preprocessing import IMAGE_EXTS, is_valid_image, list_images, load_image  # noqa: E402
@@ -78,6 +79,7 @@ def health():
         "model_version": meta.get("version"),
         "model_loaded_at": _iso(predictor.loaded_at) if predictor.loaded_at else None,
         "retraining": retrain.is_running(),
+        "database": engine.dialect.name,
     }
 
 
