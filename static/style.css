@@ -7,8 +7,6 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: #fff; color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-header { padding: 16px 24px; border-bottom: 1px solid var(--line); }
-h1 { margin: 0; font-size: 17px; font-weight: 600; }
 h2 { margin: 24px 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 nav { display: flex; gap: 20px; padding: 0 24px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .tab { border: 0; background: none; padding: 12px 0; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
@@ -52,6 +50,6 @@ pre:empty { display: none; }
 .cm td.diag { font-weight: 600; background: var(--soft); }
 @media (max-width: 760px) {
   .cols, .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  header, nav, main { padding-left: 16px; padding-right: 16px; }
+  nav, main { padding-left: 16px; padding-right: 16px; }
   .bar-row { grid-template-columns: 110px 1fr 48px; }
 }
