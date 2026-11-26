@@ -40,7 +40,8 @@ def is_running() -> bool:
     return _lock.locked()
 
 
-def embed(backbone, images: np.ndarray, batch: int = 16) -> np.ndarray:
+def embed(backbone, images: np.ndarray, batch: int = 1) -> np.ndarray:
+    """Backbone features. Batch 1 matches the prediction path, so no extra CPU kernel buffers are allocated."""
     out = [backbone(images[i:i + batch].astype(np.float32), training=False).numpy()
            for i in range(0, len(images), batch)]
     return np.concatenate(out) if out else np.zeros((0, 1280), np.float32)
@@ -76,7 +77,7 @@ def fine_tune_head(head, x, y, epochs=RETRAIN_EPOCHS, lr=3e-4):
 
 def run_retraining(trigger: str = "manual", predictor=None) -> int:
     """Run one retraining job synchronously and return its run id."""
-    from src.model import assemble, evaluate_predictions, load_model, read_metadata, save_model, split_model
+    from src.model import assemble, build_head, evaluate_predictions, load_model, read_metadata, save_model, split_model
 
     if not _lock.acquire(blocking=False):
         raise RuntimeError("A retraining job is already running")
@@ -113,10 +114,14 @@ def run_retraining(trigger: str = "manual", predictor=None) -> int:
         note(f"preprocessed {len(x_new_img)} images to {x_new_img.shape[1:]}; per class "
              f"{ {c: int((y_new == i).sum()) for i, c in enumerate(CLASS_NAMES)} }")
 
-        # 3. current model as the pre-trained starting point
-        model = load_model()
-        backbone, head = split_model(model)
+        # 3. current model as the pre-trained starting point. The frozen backbone is shared with
+        #    the served model (read-only), and the head is copied with its current weights, so
+        #    retraining never holds a second full network in memory.
+        backbone, served_head = split_model(predictor.model if predictor is not None else load_model())
+        head = build_head()
+        head.set_weights(served_head.get_weights())
         x_new = embed(backbone, x_new_img)
+        del x_new_img
         x_rep, y_rep = load_embeddings(REPLAY_EMB_PATH)
         x_test, y_test = load_embeddings(TEST_EMB_PATH)
         before = evaluate_predictions(y_test, head(x_test, training=False).numpy())
