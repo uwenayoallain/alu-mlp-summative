@@ -39,8 +39,13 @@ This notebook covers:
 """)
 
 code("""
-import gc, json, os, sys, time
+import gc, json, os, sys, time, warnings
 from pathlib import Path
+
+# Quiet TensorFlow: no C++ logs (this machine has no GPU) and no Keras notices.
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+warnings.filterwarnings("ignore", category=UserWarning)
 
 ROOT = Path.cwd().parent if Path.cwd().name == "notebook" else Path.cwd()
 sys.path.insert(0, str(ROOT))
@@ -50,6 +55,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow as tf
+import absl.logging
+absl.logging.set_verbosity(absl.logging.ERROR)
 
 from src.config import CLASS_NAMES, CLASS_LABELS, IMG_SIZE, SEED, TRAIN_DIR, TEST_DIR, DATA_DIR, MODELS_DIR
 from src import preprocessing, model as model_lib, insights
@@ -327,7 +334,7 @@ def callbacks(patience):
 
 model.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss="sparse_categorical_crossentropy", metrics=["accuracy"])
 t = time.time()
-h1 = model.fit(train_ds, validation_data=val_ds, epochs=30, class_weight=cw, callbacks=callbacks(5), verbose=2)
+h1 = model.fit(train_ds, validation_data=val_ds, epochs=30, class_weight=cw, callbacks=callbacks(5), shuffle=False, verbose=2)
 print(f"phase 1: {len(h1.history['loss'])} epochs in {time.time()-t:.0f}s")
 """)
 
@@ -349,7 +356,7 @@ print("trainable weights:", sum(int(np.prod(w.shape)) for w in model.trainable_w
 
 model.compile(optimizer=tf.keras.optimizers.Adam(1e-4), loss="sparse_categorical_crossentropy", metrics=["accuracy"])
 t = time.time()
-h2 = model.fit(train_ds, validation_data=val_ds, epochs=25, class_weight=cw, callbacks=callbacks(6), verbose=2)
+h2 = model.fit(train_ds, validation_data=val_ds, epochs=25, class_weight=cw, callbacks=callbacks(6), shuffle=False, verbose=2)
 print(f"phase 2: {len(h2.history['loss'])} epochs in {time.time()-t:.0f}s")
 """)
 
