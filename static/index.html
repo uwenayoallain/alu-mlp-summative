@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coffee Leaf Doctor</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Coffee Leaf Doctor</h1>
+  <span id="status" class="status">-</span>
+</header>
+<nav>
+  <button class="tab active" data-tab="overview">Overview</button>
+  <button class="tab" data-tab="predict">Predict</button>
+  <button class="tab" data-tab="data">Data</button>
+  <button class="tab" data-tab="retrain">Retrain</button>
+  <button class="tab" data-tab="evaluate">Evaluate</button>
+</nav>
+<main>
+
+<section id="overview" class="panel active">
+  <div class="stats">
+    <div><span>Uptime</span><b id="uptime">-</b></div>
+    <div><span>Model</span><b id="version">-</b></div>
+    <div><span>Predictions</span><b id="pred-total">-</b></div>
+    <div><span>Avg latency</span><b id="pred-latency">-</b></div>
+  </div>
+  <h2>Test metrics</h2>
+  <div class="stats" id="metrics"></div>
+  <div class="cols">
+    <div><h2>Predictions by class</h2><canvas id="chart-preds" height="200"></canvas></div>
+    <div><h2>Versions</h2>
+      <table id="versions"><thead><tr><th>Version</th><th>Source</th><th>Accuracy</th><th>F1</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <p class="muted" id="instance"></p>
+</section>
+
+<section id="predict" class="panel">
+  <div class="cols">
+    <div>
+      <label class="drop" id="drop">
+        <input type="file" id="predict-file" accept="image/*">
+        <img id="preview" alt="">
+        <span id="drop-text">Choose or drop a leaf photo</span>
+      </label>
+      <button id="predict-btn" disabled>Predict</button>
+    </div>
+    <div id="predict-result"></div>
+  </div>
+</section>
+
+<section id="data" class="panel">
+  <div class="cols">
+    <div><h2>Class balance</h2><canvas id="chart-counts" height="220"></canvas>
+      <p class="note">Rust has 3.4x more images than Cercospora or healthy, so training uses class weights.</p></div>
+    <div><h2>Lesion-coloured share of leaf</h2><canvas id="chart-lesion" height="220"></canvas>
+      <p class="note">Healthy leaves have almost no yellow or brown pixels (0.2%). Rust and brown leaf spot have the most.</p></div>
+    <div><h2>Green share of leaf</h2><canvas id="chart-green" height="220"></canvas>
+      <p class="note">Healthy leaves are greenest. Diseases overlap on colour, so the model also needs shape and texture.</p></div>
+    <div><h2>Texture</h2><canvas id="chart-texture" height="220"></canvas>
+      <p class="note">Brown leaf spot is the roughest (dark, sharp patches). Miner trails are smooth, close to healthy.</p></div>
+  </div>
+</section>
+
+<section id="retrain" class="panel">
+  <div class="cols">
+    <div>
+      <h2>Upload</h2>
+      <p class="muted">Images of one class, or a zip with class folders.</p>
+      <select id="upload-label"><option value="">Class (or zip folders)</option></select>
+      <label class="drop small"><input type="file" id="upload-files" multiple accept="image/*,.zip"><span id="upload-text">Choose files</span></label>
+      <button id="upload-btn">Upload</button>
+      <div id="upload-result"></div>
+    </div>
+    <div>
+      <h2>Waiting for retraining</h2>
+      <canvas id="chart-pending" height="170"></canvas>
+      <p class="muted" id="threshold-text"></p>
+      <button id="retrain-btn">Retrain</button>
+    </div>
+  </div>
+  <h2>Runs</h2>
+  <table id="runs"><thead><tr><th>Run</th><th>Trigger</th><th>Status</th><th>Images</th><th>Acc. before</th><th>Acc. after</th><th>F1 after</th><th>Promoted</th></tr></thead><tbody></tbody></table>
+  <pre id="run-log"></pre>
+</section>
+
+<section id="evaluate" class="panel">
+  <button id="eval-btn">Evaluate current model</button>
+  <div id="eval-result"></div>
+</section>
+
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
