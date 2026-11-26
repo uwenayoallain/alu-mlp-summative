@@ -1,0 +1,25 @@
+# Load-balanced setup for the flood test:
+#   docker compose up -d --build --scale api=N
+# nginx (port 8080) round-robins requests across the N api containers.
+services:
+  api:
+    build: .
+    image: coffee-leaf-api
+    environment:
+      TF_THREADS: "1"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+    expose:
+      - "8000"
+
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - api

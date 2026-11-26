@@ -1,0 +1,11 @@
+.venv
+.git
+raw_downloads
+notebook
+locust
+data/train
+data/new_data
+data/uploads
+data/*.db*
+**/__pycache__
+*.ipynb

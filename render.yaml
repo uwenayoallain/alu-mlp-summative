@@ -1,0 +1,14 @@
+# Render Blueprint: New > Blueprint, pick this repository, Apply.
+services:
+  - type: web
+    name: coffee-leaf-doctor
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TF_THREADS
+        value: "1"
+      - key: RETRAIN_THRESHOLD
+        value: "50"

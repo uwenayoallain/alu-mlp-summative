@@ -1,0 +1,13 @@
+# Runtime dependencies for the API container, pinned to the versions the model was trained with.
+# CPU-only TensorFlow keeps the image small.
+tensorflow-cpu==2.20.0
+keras==3.15.1
+h5py==3.16.0
+numpy==2.5.5
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34
+pillow==13.0.0
+scikit-learn==1.9.1
+sqlalchemy==2.1.9
+psycopg[binary]==3.3.9
