@@ -8,6 +8,8 @@ Uses SQLite by default; set DATABASE_URL to a PostgreSQL URL to use Postgres.
 from __future__ import annotations
 
 import re
+import ssl
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from datetime import datetime, timezone
 
 from sqlalchemy import (Boolean, DateTime, Float, Integer, LargeBinary, String, Text, create_engine, func,
@@ -74,10 +76,30 @@ class ModelVersion(Base):
 
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-# Render and Heroku give postgres:// or postgresql:// URLs; point both at the installed psycopg 3 driver.
-_url = re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", DATABASE_URL)
-engine = create_engine(_url, connect_args={"check_same_thread": False} if _url.startswith("sqlite") else {},
-                       pool_pre_ping=True)
+def _engine_args(url: str) -> tuple[str, dict]:
+    """SQLAlchemy URL and connect args for SQLite or PostgreSQL.
+
+    PostgreSQL uses pg8000, a pure-Python driver that encrypts with Python's ssl module. C drivers
+    (psycopg, libpq) load a native OpenSSL that clashes with the TLS library bundled in TensorFlow
+    and crash the process on SSL connections. Like libpq's sslmode=require, the connection is
+    encrypted without verifying the certificate; sslmode=disable turns SSL off.
+    """
+    if url.startswith("sqlite"):
+        return url, {"check_same_thread": False}
+    parts = urlsplit(re.sub(r"^postgres(ql)?://", "postgresql+pg8000://", url))
+    params = dict(parse_qsl(parts.query))
+    sslmode = params.pop("sslmode", "require")
+    args = {}
+    if sslmode != "disable":
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        args["ssl_context"] = ctx
+    return urlunsplit(parts._replace(query=urlencode(params))), args
+
+
+_url, _connect_args = _engine_args(DATABASE_URL)
+engine = create_engine(_url, connect_args=_connect_args, pool_pre_ping=True)
 
 
 def init_db():
