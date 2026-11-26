@@ -101,12 +101,6 @@ Locust, 40 users, 30 seconds per run, one CPU and 1 GB per container, nginx roun
 Going from 1 to 4 containers cut median latency 7x and raised throughput 2.4x. Throughput does not
 scale linearly because Locust and the four containers share one 8-core laptop.
 
-## Demo files
-
-- `demo/predict_samples/`: one unseen photo per class, each predicted correctly.
-- `demo/new_field_data.zip`: the 108 `new_data` images in class folders. Uploading it in the Retrain
-  tab saves them to the database and starts retraining automatically (threshold 50).
-
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and Docker.
@@ -142,7 +136,7 @@ docker build -t coffee-leaf-api . && docker run -p 8000:8000 coffee-leaf-api
 Predict from the command line:
 
 ```bash
-uv run python -m src.prediction demo/predict_samples/rust.jpg
+uv run python -m src.prediction data/new_data/rust/bracol_1561.jpg
 ```
 
 Load test with 1, 2 and 4 containers:
