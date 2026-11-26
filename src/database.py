@@ -109,6 +109,17 @@ def init_db():
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
 
 
+def fail_interrupted_runs():
+    """Mark runs left 'running' by a crash or restart as failed; their uploads stay available."""
+    from sqlalchemy import update
+
+    with session() as s:
+        s.execute(update(TrainingRun).where(TrainingRun.status.in_(["queued", "running"]))
+                  .values(status="failed", finished_at=_now(),
+                          log=TrainingRun.log + "\ninterrupted: the server restarted before this run finished"))
+        s.commit()
+
+
 def session() -> Session:
     return Session(engine, expire_on_commit=False)
 

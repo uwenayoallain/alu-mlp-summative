@@ -19,6 +19,7 @@ within the memory of a small cloud instance.
 
 from __future__ import annotations
 
+import contextlib
 import gc
 import io
 import threading
@@ -40,10 +41,15 @@ def is_running() -> bool:
     return _lock.locked()
 
 
-def embed(backbone, images: np.ndarray, batch: int = 1) -> np.ndarray:
-    """Backbone features. Batch 1 matches the prediction path, so no extra CPU kernel buffers are allocated."""
-    out = [backbone(images[i:i + batch].astype(np.float32), training=False).numpy()
-           for i in range(0, len(images), batch)]
+def embed(backbone, images: np.ndarray, batch: int = 1, lock=None) -> np.ndarray:
+    """Backbone features. Batch 1 matches the prediction path, so no extra CPU kernel buffers are allocated.
+    `lock` is the predictor's inference lock: holding it per image keeps predictions and retraining from
+    running the network at the same time, which would double TensorFlow's working memory."""
+    lock = lock or contextlib.nullcontext()
+    out = []
+    for i in range(0, len(images), batch):
+        with lock:
+            out.append(backbone(images[i:i + batch].astype(np.float32), training=False).numpy())
     return np.concatenate(out) if out else np.zeros((0, 1280), np.float32)
 
 
@@ -120,7 +126,7 @@ def run_retraining(trigger: str = "manual", predictor=None) -> int:
         backbone, served_head = split_model(predictor.model if predictor is not None else load_model())
         head = build_head()
         head.set_weights(served_head.get_weights())
-        x_new = embed(backbone, x_new_img)
+        x_new = embed(backbone, x_new_img, lock=predictor._infer if predictor is not None else None)
         del x_new_img
         x_rep, y_rep = load_embeddings(REPLAY_EMB_PATH)
         x_test, y_test = load_embeddings(TEST_EMB_PATH)

@@ -4,6 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TF_CPP_MIN_LOG_LEVEL=2 \
     TF_THREADS=2 \
+    # Lower memory for 512 MB hosts: fewer malloc arenas and thread pools.
+    MALLOC_ARENA_MAX=2 \
+    OMP_NUM_THREADS=1 \
     PORT=8000
 
 WORKDIR /app
