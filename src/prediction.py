@@ -35,9 +35,10 @@ class Predictor:
             self.loaded_at = time.time()
 
     def predict_array(self, x: np.ndarray) -> np.ndarray:
+        """Predict one image at a time: same input shape as warm-up, so memory stays flat."""
         with self._lock:
             model = self.model
-        return model(x, training=False).numpy()
+        return np.concatenate([model(x[i:i + 1].astype(np.float32), training=False).numpy() for i in range(len(x))])
 
     def predict_bytes(self, data: bytes) -> dict:
         probs = self.predict_array(load_image(data)[None])[0]
