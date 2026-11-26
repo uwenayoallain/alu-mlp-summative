@@ -7,8 +7,8 @@ a Render deployment and a Locust load test.
 | | |
 |---|---|
 | Video demo | YOUTUBE_LINK |
-| Live app | RENDER_URL (free tier: first request after 15 idle minutes takes about a minute) |
-| API docs | RENDER_URL/docs |
+| Live app | https://coffee-leaf-doctor.onrender.com (free tier: first request after 15 idle minutes takes about a minute) |
+| API docs | https://coffee-leaf-doctor.onrender.com/docs |
 | Notebook | [notebook/coffee_leaf_disease.ipynb](notebook/coffee_leaf_disease.ipynb) |
 
 ## Use case
